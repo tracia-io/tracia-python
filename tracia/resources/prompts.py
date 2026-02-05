@@ -45,7 +45,7 @@ class Prompts:
             TraciaError: If the request fails.
         """
         data = self._client.get("/api/v1/prompts")
-        return [PromptListItem.model_validate(item) for item in data]
+        return [PromptListItem.model_validate(item) for item in data["prompts"]]
 
     async def alist(self) -> list[PromptListItem]:
         """List all prompts asynchronously.
@@ -60,7 +60,7 @@ class Prompts:
             raise RuntimeError("Async client not initialized")
 
         data = await self._async_client.get("/api/v1/prompts")
-        return [PromptListItem.model_validate(item) for item in data]
+        return [PromptListItem.model_validate(item) for item in data["prompts"]]
 
     def get(self, slug: str) -> Prompt:
         """Get a prompt by slug.

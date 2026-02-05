@@ -347,8 +347,27 @@ class CreateSpanResult(BaseModel):
     trace_id: str = Field(alias="traceId")
 
 
+class SpanListItem(BaseModel):
+    """A span item from the list endpoint (reduced fields)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    span_id: str = Field(alias="spanId")
+    trace_id: str = Field(alias="traceId")
+    prompt_slug: str | None = Field(default=None, alias="promptSlug")
+    model: str
+    status: Literal["SUCCESS", "ERROR"]
+    latency_ms: int = Field(alias="latencyMs")
+    input_tokens: int = Field(alias="inputTokens")
+    output_tokens: int = Field(alias="outputTokens")
+    total_tokens: int = Field(alias="totalTokens")
+    cost: float | None = None
+    created_at: datetime = Field(alias="createdAt")
+
+
 class Span(BaseModel):
-    """A span from the API."""
+    """A span from the API (full detail)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -397,7 +416,7 @@ class ListSpansResult(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    spans: list[Span]
+    spans: list[SpanListItem]
     cursor: str | None = None
     has_more: bool = Field(default=False, alias="hasMore")
 
@@ -433,6 +452,7 @@ class EvaluateResult(BaseModel):
 class PromptMessage(BaseModel):
     """A message in a prompt template."""
 
+    id: str
     role: Literal["system", "developer", "user", "assistant"]
     content: str
 
@@ -487,12 +507,12 @@ class CreatePromptOptions(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    slug: str
     name: str
+    slug: str | None = None
     description: str | None = None
-    messages: list[PromptMessage]
-    model: str
-    provider: LLMProvider
+    content: list[PromptMessage]
+    model: str | None = None
+    provider: LLMProvider | None = None
     temperature: float | None = None
     max_output_tokens: int | None = Field(default=None, alias="maxOutputTokens")
     top_p: float | None = Field(default=None, alias="topP")
@@ -505,8 +525,9 @@ class UpdatePromptOptions(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str | None = None
+    slug: str | None = None
     description: str | None = None
-    messages: list[PromptMessage] | None = None
+    content: list[PromptMessage] | None = None
     model: str | None = None
     provider: LLMProvider | None = None
     temperature: float | None = None
@@ -531,10 +552,13 @@ class RunResult(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    text: str
+    text: str | None = None
     span_id: str = Field(alias="spanId")
     trace_id: str = Field(alias="traceId")
     prompt_version: int = Field(alias="promptVersion")
     latency_ms: int = Field(alias="latencyMs")
     usage: TokenUsage
     cost: float
+    finish_reason: FinishReason | None = Field(default=None, alias="finishReason")
+    tool_calls: list[ToolCall] | None = Field(default=None, alias="toolCalls")
+    structured_output: dict[str, Any] | None = Field(default=None, alias="structuredOutput")
