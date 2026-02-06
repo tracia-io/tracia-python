@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._types import (
     CreatePromptOptions,
+    LocalPromptMessage,
     Prompt,
     PromptListItem,
     RunOptions,
@@ -269,5 +270,14 @@ class Prompts:
                 body["userId"] = options.user_id
             if options.session_id is not None:
                 body["sessionId"] = options.session_id
+            if options.trace_id is not None:
+                body["traceId"] = options.trace_id
+            if options.parent_span_id is not None:
+                body["parentSpanId"] = options.parent_span_id
+            if options.messages is not None:
+                body["messages"] = [
+                    msg.model_dump(by_alias=True, exclude_none=True)
+                    for msg in options.messages
+                ]
 
         return body

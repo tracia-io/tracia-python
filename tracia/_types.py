@@ -566,6 +566,9 @@ class RunOptions(BaseModel):
     tags: list[str] | None = None
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")
+    trace_id: str | None = Field(default=None, alias="traceId")
+    parent_span_id: str | None = Field(default=None, alias="parentSpanId")
+    messages: list[LocalPromptMessage] | None = None
 
 
 class RunResult(BaseModel):
@@ -583,3 +586,4 @@ class RunResult(BaseModel):
     finish_reason: FinishReason | None = Field(default=None, alias="finishReason")
     tool_calls: list[ToolCall] | None = Field(default=None, alias="toolCalls")
     structured_output: dict[str, Any] | None = Field(default=None, alias="structuredOutput")
+    messages: list[LocalPromptMessage] | None = None
