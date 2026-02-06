@@ -14,6 +14,7 @@ from ._types import (
     FinishReason,
     LLMProvider,
     LocalPromptMessage,
+    ResponseFormatJsonSchema,
     TextPart,
     ToolCall,
     ToolCallPart,
@@ -284,6 +285,49 @@ def convert_tool_choice(tool_choice: ToolChoice | None) -> str | dict[str, Any] 
     return None
 
 
+def convert_response_format(
+    response_format: dict[str, Any] | ResponseFormatJsonSchema | None,
+) -> dict[str, Any] | None:
+    """Convert a Tracia response format to LiteLLM format.
+
+    Args:
+        response_format: The Tracia response format.
+
+    Returns:
+        Response format in LiteLLM/OpenAI format, or None.
+    """
+    if response_format is None:
+        return None
+
+    if isinstance(response_format, ResponseFormatJsonSchema):
+        schema = response_format.schema_
+        name = response_format.name or "response"
+        json_schema: dict[str, Any] = {"name": name, "schema": schema}
+        if response_format.description is not None:
+            json_schema["description"] = response_format.description
+        return {"type": "json_schema", "json_schema": json_schema}
+
+    # Plain dict — check for our simplified format
+    if isinstance(response_format, dict):
+        fmt_type = response_format.get("type")
+        schema = response_format.get("schema")
+
+        if fmt_type == "json" and schema is not None:
+            name = response_format.get("name", "response")
+            json_schema: dict[str, Any] = {"name": name, "schema": schema}
+            description = response_format.get("description")
+            if description is not None:
+                json_schema["description"] = description
+            return {"type": "json_schema", "json_schema": json_schema}
+
+        if fmt_type == "json":
+            return {"type": "json_object"}
+
+        return response_format
+
+    return None
+
+
 def parse_finish_reason(reason: str | None) -> FinishReason:
     """Parse the finish reason from LiteLLM response.
 
@@ -357,6 +401,7 @@ class LLMClient:
         tool_choice: ToolChoice | None = None,
         api_key: str | None = None,
         timeout: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> CompletionResult:
         """Make a synchronous completion request.
 
@@ -415,6 +460,8 @@ class LLMClient:
             request_kwargs["tool_choice"] = litellm_tool_choice
         if timeout is not None:
             request_kwargs["timeout"] = timeout
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
 
         try:
             response = litellm.completion(**request_kwargs)
@@ -456,6 +503,7 @@ class LLMClient:
         tool_choice: ToolChoice | None = None,
         api_key: str | None = None,
         timeout: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> CompletionResult:
         """Make an asynchronous completion request.
 
@@ -514,6 +562,8 @@ class LLMClient:
             request_kwargs["tool_choice"] = litellm_tool_choice
         if timeout is not None:
             request_kwargs["timeout"] = timeout
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
 
         try:
             response = await litellm.acompletion(**request_kwargs)
@@ -555,6 +605,7 @@ class LLMClient:
         tool_choice: ToolChoice | None = None,
         api_key: str | None = None,
         timeout: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> tuple[Iterator[str], list[CompletionResult], LLMProvider]:
         """Make a streaming completion request.
 
@@ -614,6 +665,8 @@ class LLMClient:
             request_kwargs["tool_choice"] = litellm_tool_choice
         if timeout is not None:
             request_kwargs["timeout"] = timeout
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
 
         result_holder: list[CompletionResult] = []
 
@@ -717,6 +770,7 @@ class LLMClient:
         tool_choice: ToolChoice | None = None,
         api_key: str | None = None,
         timeout: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> tuple[AsyncIterator[str], list[CompletionResult], LLMProvider]:
         """Make an async streaming completion request.
 
@@ -776,6 +830,8 @@ class LLMClient:
             request_kwargs["tool_choice"] = litellm_tool_choice
         if timeout is not None:
             request_kwargs["timeout"] = timeout
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
 
         result_holder: list[CompletionResult] = []
 

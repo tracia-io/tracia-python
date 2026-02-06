@@ -90,6 +90,26 @@ class ToolCall(BaseModel):
 ToolChoice = Union[Literal["auto", "none", "required"], dict[str, str]]
 
 
+# Response Format
+
+
+class ResponseFormatJsonSchema(BaseModel):
+    """JSON schema response format for structured outputs."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["json"] = "json"
+    schema_: dict[str, Any] = Field(alias="schema")
+    name: str | None = None
+    description: str | None = None
+
+
+ResponseFormat = Union[
+    dict[str, Any],
+    ResponseFormatJsonSchema,
+]
+
+
 # Messages
 
 
@@ -134,6 +154,7 @@ class RunLocalInput(BaseModel):
     span_id: str | None = Field(default=None, alias="spanId")
     tools: list[ToolDefinition] | None = None
     tool_choice: ToolChoice | None = Field(default=None, alias="toolChoice")
+    response_format: ResponseFormat | None = Field(default=None, alias="responseFormat")
     trace_id: str | None = Field(default=None, alias="traceId")
     parent_span_id: str | None = Field(default=None, alias="parentSpanId")
 

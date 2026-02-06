@@ -66,6 +66,7 @@ from ._types import (
     PromptListItem,
     PromptMessage,
     PromptVersion,
+    ResponseFormatJsonSchema,
     ResponsesEvent,
     ResponsesFunctionCall,
     ResponsesFunctionCallOutput,
@@ -121,6 +122,8 @@ __all__ = [
     "JsonSchemaProperty",
     "ToolCall",
     "ToolChoice",
+    # Types - Response Format
+    "ResponseFormatJsonSchema",
     # Types - Run Local
     "RunLocalInput",
     "RunLocalResult",

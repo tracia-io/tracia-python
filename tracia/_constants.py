@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # SDK Version (defined here to avoid circular imports)
-SDK_VERSION = "0.1.1"
+SDK_VERSION = "0.2.0"
 
 # API Configuration
 BASE_URL = "https://app.tracia.io"

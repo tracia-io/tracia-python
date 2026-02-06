@@ -20,13 +20,14 @@ from ._constants import (
 )
 from ._errors import TraciaError, TraciaErrorCode, sanitize_error_message
 from ._http import AsyncHttpClient, HttpClient
-from ._llm import LLMClient, build_assistant_message, resolve_provider
+from ._llm import LLMClient, build_assistant_message, convert_response_format, resolve_provider
 from ._session import TraciaSession
 from ._streaming import AsyncLocalStream, LocalStream
 from ._types import (
     CreateSpanPayload,
     LocalPromptMessage,
     LLMProvider,
+    ResponseFormat,
     RunLocalResult,
     StreamResult,
     TokenUsage,
@@ -263,6 +264,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> RunLocalResult: ...
@@ -289,6 +291,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> LocalStream: ...
@@ -314,6 +317,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> RunLocalResult | LocalStream:
@@ -361,6 +365,8 @@ class Tracia:
         # Calculate timeout
         timeout_seconds = (timeout_ms or DEFAULT_TIMEOUT_MS) / 1000.0
 
+        litellm_response_format = convert_response_format(response_format)
+
         if stream:
             return self._run_local_streaming(
                 messages=prompt_messages,
@@ -382,6 +388,7 @@ class Tracia:
                 tools=tools,
                 tool_choice=tool_choice,
                 variables=variables,
+                response_format=litellm_response_format,
             )
         else:
             return self._run_local_non_streaming(
@@ -404,6 +411,7 @@ class Tracia:
                 tools=tools,
                 tool_choice=tool_choice,
                 variables=variables,
+                response_format=litellm_response_format,
             )
 
     def _run_local_non_streaming(
@@ -428,6 +436,7 @@ class Tracia:
         tools: list[ToolDefinition] | None,
         tool_choice: ToolChoice | None,
         variables: dict[str, str] | None,
+        response_format: dict[str, Any] | None = None,
     ) -> RunLocalResult:
         """Run local prompt without streaming."""
         start_time = time.time()
@@ -451,6 +460,7 @@ class Tracia:
                 tool_choice=tool_choice,
                 api_key=provider_api_key,
                 timeout=timeout,
+                response_format=response_format,
             )
 
             result_text = completion.text
@@ -537,6 +547,7 @@ class Tracia:
         tools: list[ToolDefinition] | None,
         tool_choice: ToolChoice | None,
         variables: dict[str, str] | None,
+        response_format: dict[str, Any] | None = None,
     ) -> LocalStream:
         """Run local prompt with streaming."""
         start_time = time.time()
@@ -555,6 +566,7 @@ class Tracia:
             tool_choice=tool_choice,
             api_key=provider_api_key,
             timeout=timeout,
+            response_format=response_format,
         )
 
         def wrapped_chunks():
@@ -660,6 +672,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> RunLocalResult: ...
@@ -686,6 +699,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> AsyncLocalStream: ...
@@ -711,6 +725,7 @@ class Tracia:
         span_id: str | None = None,
         tools: list[ToolDefinition] | None = None,
         tool_choice: ToolChoice | None = None,
+        response_format: ResponseFormat | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> RunLocalResult | AsyncLocalStream:
@@ -731,6 +746,8 @@ class Tracia:
 
         # Calculate timeout
         timeout_seconds = (timeout_ms or DEFAULT_TIMEOUT_MS) / 1000.0
+
+        litellm_response_format = convert_response_format(response_format)
 
         if stream:
             return await self._arun_local_streaming(
@@ -753,6 +770,7 @@ class Tracia:
                 tools=tools,
                 tool_choice=tool_choice,
                 variables=variables,
+                response_format=litellm_response_format,
             )
         else:
             return await self._arun_local_non_streaming(
@@ -775,6 +793,7 @@ class Tracia:
                 tools=tools,
                 tool_choice=tool_choice,
                 variables=variables,
+                response_format=litellm_response_format,
             )
 
     async def _arun_local_non_streaming(
@@ -799,6 +818,7 @@ class Tracia:
         tools: list[ToolDefinition] | None,
         tool_choice: ToolChoice | None,
         variables: dict[str, str] | None,
+        response_format: dict[str, Any] | None = None,
     ) -> RunLocalResult:
         """Run local prompt without streaming (async)."""
         start_time = time.time()
@@ -823,6 +843,7 @@ class Tracia:
                 tool_choice=tool_choice,
                 api_key=provider_api_key,
                 timeout=timeout,
+                response_format=response_format,
             )
 
             result_text = completion.text
@@ -909,6 +930,7 @@ class Tracia:
         tools: list[ToolDefinition] | None,
         tool_choice: ToolChoice | None,
         variables: dict[str, str] | None,
+        response_format: dict[str, Any] | None = None,
     ) -> AsyncLocalStream:
         """Run local prompt with streaming (async)."""
         start_time = time.time()
@@ -928,6 +950,7 @@ class Tracia:
             tool_choice=tool_choice,
             api_key=provider_api_key,
             timeout=timeout,
+            response_format=response_format,
         )
 
         async def wrapped_chunks():
