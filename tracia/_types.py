@@ -375,7 +375,7 @@ class SpanListItem(BaseModel):
 
     id: str
     span_id: str = Field(alias="spanId")
-    trace_id: str = Field(alias="traceId")
+    trace_id: str | None = Field(default=None, alias="traceId")
     prompt_slug: str | None = Field(default=None, alias="promptSlug")
     model: str
     status: Literal["SUCCESS", "ERROR"]
@@ -394,7 +394,7 @@ class Span(BaseModel):
 
     id: str
     span_id: str = Field(alias="spanId")
-    trace_id: str = Field(alias="traceId")
+    trace_id: str | None = Field(default=None, alias="traceId")
     parent_span_id: str | None = Field(default=None, alias="parentSpanId")
     prompt_slug: str | None = Field(default=None, alias="promptSlug")
     prompt_version: int | None = Field(default=None, alias="promptVersion")
