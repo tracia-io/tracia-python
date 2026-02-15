@@ -563,6 +563,7 @@ class RunOptions(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     model: str | None = None
+    version: int | None = None
     tags: list[str] | None = None
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")

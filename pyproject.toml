@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tracia"
-version = "0.2.1"
+version = "0.2.2"
 description = "LLM prompt management and tracing SDK"
 readme = "README.md"
 license = "MIT"

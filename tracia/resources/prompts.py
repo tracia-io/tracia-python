@@ -264,6 +264,8 @@ class Prompts:
         if options:
             if options.model is not None:
                 body["model"] = options.model
+            if options.version is not None:
+                body["version"] = options.version
             if options.tags is not None:
                 body["tags"] = options.tags
             if options.user_id is not None:
