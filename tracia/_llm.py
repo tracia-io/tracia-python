@@ -71,7 +71,49 @@ _MODEL_PROVIDER_MAP: dict[str, LLMProvider] = {
     "gemini-2.0-flash-lite": LLMProvider.GOOGLE,
     "gemini-2.5-pro": LLMProvider.GOOGLE,
     "gemini-2.5-flash": LLMProvider.GOOGLE,
+    # Amazon Bedrock - Anthropic Claude (via Bedrock)
+    "anthropic.claude-haiku-4-5-20251001-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "anthropic.claude-sonnet-4-20250514-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "anthropic.claude-sonnet-4-5-20250929-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "anthropic.claude-opus-4-5-20251101-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "anthropic.claude-opus-4-6-v1": LLMProvider.AMAZON_BEDROCK,
+    # Amazon Bedrock - Amazon Nova
+    "amazon.nova-micro-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "amazon.nova-lite-v1:0": LLMProvider.AMAZON_BEDROCK,
+    "amazon.nova-pro-v1:0": LLMProvider.AMAZON_BEDROCK,
+    # Amazon Bedrock - Mistral
+    "mistral.pixtral-large-2502-v1:0": LLMProvider.AMAZON_BEDROCK,
 }
+
+
+_BEDROCK_VENDOR_PREFIXES = ("anthropic.", "amazon.", "meta.", "mistral.", "cohere.", "deepseek.")
+_KNOWN_REGION_PREFIXES = ("us", "eu", "ap", "sa", "ca", "me", "af")
+
+
+def _is_bedrock_model(model: str) -> bool:
+    if any(model.startswith(prefix) for prefix in _BEDROCK_VENDOR_PREFIXES):
+        return True
+    dot = model.find(".")
+    if dot > 0 and model[:dot] in _KNOWN_REGION_PREFIXES:
+        after_region = model[dot + 1 :]
+        return any(after_region.startswith(prefix) for prefix in _BEDROCK_VENDOR_PREFIXES)
+    return False
+
+
+def apply_bedrock_region_prefix(model: str, region: str) -> str:
+    """Prepend the region shorthand to a Bedrock model ID.
+
+    Newer Bedrock models require a region prefix (e.g. ``eu.anthropic.claude-...``
+    for ``eu-central-1``). If the model already has a region prefix it is replaced.
+    """
+    prefix = region.split("-")[0]
+    dot = model.find(".")
+    if dot == -1:
+        return f"{prefix}.{model}"
+    before_dot = model[:dot]
+    if before_dot in _KNOWN_REGION_PREFIXES:
+        return f"{prefix}.{model[dot + 1:]}"
+    return f"{prefix}.{model}"
 
 
 def resolve_provider(model: str, explicit_provider: LLMProvider | None) -> LLMProvider:
@@ -95,6 +137,8 @@ def resolve_provider(model: str, explicit_provider: LLMProvider | None) -> LLMPr
         return _MODEL_PROVIDER_MAP[model]
 
     # Try prefix-based detection
+    if _is_bedrock_model(model):
+        return LLMProvider.AMAZON_BEDROCK
     if model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3") or model.startswith("o4"):
         return LLMProvider.OPENAI
     if model.startswith("claude-"):
@@ -122,6 +166,9 @@ def get_litellm_model(model: str, provider: LLMProvider) -> str:
     Returns:
         The model string suitable for ``litellm.completion()``.
     """
+    if provider == LLMProvider.AMAZON_BEDROCK:
+        region = os.environ.get("AWS_REGION", "eu-central-1")
+        return f"bedrock/{apply_bedrock_region_prefix(model, region)}"
     if provider == LLMProvider.GOOGLE and not model.startswith("gemini/"):
         return f"gemini/{model}"
     return model
@@ -130,7 +177,7 @@ def get_litellm_model(model: str, provider: LLMProvider) -> str:
 def get_provider_api_key(
     provider: LLMProvider,
     provider_api_key: str | None = None,
-) -> str:
+) -> str | None:
     """Get the API key for a provider.
 
     Args:
@@ -138,10 +185,10 @@ def get_provider_api_key(
         provider_api_key: Explicitly provided API key.
 
     Returns:
-        The API key.
+        The API key, or None for Bedrock when relying on the AWS credential chain.
 
     Raises:
-        TraciaError: If no API key is found.
+        TraciaError: If no API key is found (except for Bedrock).
     """
     if provider_api_key:
         return provider_api_key
@@ -151,6 +198,10 @@ def get_provider_api_key(
         key = os.environ.get(env_var)
         if key:
             return key
+
+    # Bedrock can use the AWS SDK credential chain (IAM roles, env vars, etc.)
+    if provider == LLMProvider.AMAZON_BEDROCK:
+        return None
 
     raise TraciaError(
         code=TraciaErrorCode.MISSING_PROVIDER_API_KEY,
@@ -443,8 +494,9 @@ class LLMClient:
         request_kwargs: dict[str, Any] = {
             "model": get_litellm_model(model, resolved_provider),
             "messages": litellm_messages,
-            "api_key": resolved_api_key,
         }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
 
         if temperature is not None:
             request_kwargs["temperature"] = temperature
@@ -545,8 +597,9 @@ class LLMClient:
         request_kwargs: dict[str, Any] = {
             "model": get_litellm_model(model, resolved_provider),
             "messages": litellm_messages,
-            "api_key": resolved_api_key,
         }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
 
         if temperature is not None:
             request_kwargs["temperature"] = temperature
@@ -647,9 +700,10 @@ class LLMClient:
         request_kwargs: dict[str, Any] = {
             "model": get_litellm_model(model, resolved_provider),
             "messages": litellm_messages,
-            "api_key": resolved_api_key,
             "stream": True,
         }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
 
         if temperature is not None:
             request_kwargs["temperature"] = temperature
@@ -812,9 +866,10 @@ class LLMClient:
         request_kwargs: dict[str, Any] = {
             "model": get_litellm_model(model, resolved_provider),
             "messages": litellm_messages,
-            "api_key": resolved_api_key,
             "stream": True,
         }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
 
         if temperature is not None:
             request_kwargs["temperature"] = temperature
