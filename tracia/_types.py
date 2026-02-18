@@ -15,6 +15,7 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
+    AMAZON_BEDROCK = "amazon_bedrock"
 
 
 class TokenUsage(BaseModel):
