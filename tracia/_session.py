@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, overload
 
 from ._streaming import AsyncLocalStream, LocalStream
-from ._types import RunLocalInput, RunLocalResult, StreamResult
+from ._types import RunEmbeddingResult, RunLocalInput, RunLocalResult, StreamResult
 from ._utils import generate_trace_id
 
 if TYPE_CHECKING:
@@ -216,6 +216,50 @@ class TraciaSession:
             return self._wrap_async_stream(result)
 
         # Update session state from result
+        self._update_from_result(result.trace_id, result.span_id)
+        return result
+
+    def run_embedding(self, **kwargs: Any) -> RunEmbeddingResult:
+        """Generate embeddings with session context.
+
+        Automatically includes trace_id and parent_span_id from the session.
+
+        Args:
+            **kwargs: Arguments for run_embedding.
+
+        Returns:
+            The embedding result.
+        """
+        if self._trace_id is None:
+            self._trace_id = generate_trace_id()
+
+        kwargs["trace_id"] = self._trace_id
+        if self._last_span_id is not None:
+            kwargs["parent_span_id"] = self._last_span_id
+
+        result = self._tracia.run_embedding(**kwargs)
+        self._update_from_result(result.trace_id, result.span_id)
+        return result
+
+    async def arun_embedding(self, **kwargs: Any) -> RunEmbeddingResult:
+        """Generate embeddings with session context asynchronously.
+
+        Automatically includes trace_id and parent_span_id from the session.
+
+        Args:
+            **kwargs: Arguments for arun_embedding.
+
+        Returns:
+            The embedding result.
+        """
+        if self._trace_id is None:
+            self._trace_id = generate_trace_id()
+
+        kwargs["trace_id"] = self._trace_id
+        if self._last_span_id is not None:
+            kwargs["parent_span_id"] = self._last_span_id
+
+        result = await self._tracia.arun_embedding(**kwargs)
         self._update_from_result(result.trace_id, result.span_id)
         return result
 

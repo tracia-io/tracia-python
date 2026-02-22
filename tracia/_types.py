@@ -357,6 +357,9 @@ class CreateSpanPayload(BaseModel):
     tool_calls: list[ToolCall] | None = Field(default=None, alias="toolCalls")
     trace_id: str | None = Field(default=None, alias="traceId")
     parent_span_id: str | None = Field(default=None, alias="parentSpanId")
+    span_kind: Literal["ROOT", "LLM", "EMBEDDING"] | None = Field(
+        default=None, alias="spanKind"
+    )
 
 
 class CreateSpanResult(BaseModel):
@@ -589,3 +592,53 @@ class RunResult(BaseModel):
     tool_calls: list[ToolCall] | None = Field(default=None, alias="toolCalls")
     structured_output: dict[str, Any] | None = Field(default=None, alias="structuredOutput")
     messages: list[LocalPromptMessage] | None = None
+
+
+class RunEmbeddingInput(BaseModel):
+    """Input for run_embedding method."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    input: str | list[str]
+    model: str
+    provider: LLMProvider | None = None
+    provider_api_key: str | None = Field(default=None, alias="providerApiKey")
+    dimensions: int | None = None
+    send_trace: bool | None = Field(default=None, alias="sendTrace")
+    span_id: str | None = Field(default=None, alias="spanId")
+    tags: list[str] | None = None
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    trace_id: str | None = Field(default=None, alias="traceId")
+    parent_span_id: str | None = Field(default=None, alias="parentSpanId")
+    timeout_ms: int | None = Field(default=None, alias="timeoutMs")
+
+
+class EmbeddingVector(BaseModel):
+    """A single embedding vector."""
+
+    values: list[float]
+    index: int
+
+
+class EmbeddingUsage(BaseModel):
+    """Token usage for embedding requests."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    total_tokens: int = Field(alias="totalTokens")
+
+
+class RunEmbeddingResult(BaseModel):
+    """Result from run_embedding method."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    embeddings: list[EmbeddingVector]
+    span_id: str = Field(alias="spanId")
+    trace_id: str = Field(alias="traceId")
+    latency_ms: int = Field(alias="latencyMs")
+    usage: EmbeddingUsage
+    cost: float | None = None
+    provider: LLMProvider
+    model: str

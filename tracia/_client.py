@@ -25,9 +25,12 @@ from ._session import TraciaSession
 from ._streaming import AsyncLocalStream, LocalStream
 from ._types import (
     CreateSpanPayload,
+    EmbeddingUsage,
+    EmbeddingVector,
     LocalPromptMessage,
     LLMProvider,
     ResponseFormat,
+    RunEmbeddingResult,
     RunLocalResult,
     StreamResult,
     TokenUsage,
@@ -1034,6 +1037,246 @@ class Tracia:
             result_future=result_future,
             abort_event=abort_event,
         )
+
+    def run_embedding(
+        self,
+        *,
+        input: str | list[str],
+        model: str,
+        provider: LLMProvider | None = None,
+        provider_api_key: str | None = None,
+        dimensions: int | None = None,
+        send_trace: bool | None = None,
+        span_id: str | None = None,
+        tags: list[str] | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        trace_id: str | None = None,
+        parent_span_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> RunEmbeddingResult:
+        """Generate embeddings for text input(s).
+
+        Args:
+            input: Text or list of texts to embed.
+            model: Embedding model (e.g., "text-embedding-3-small").
+            provider: The provider (auto-detected if not specified).
+            provider_api_key: API key for the provider.
+            dimensions: Optional dimension override.
+            send_trace: Whether to send trace data (default True).
+            span_id: Custom span ID.
+            tags: Tags for the span.
+            user_id: User ID for the span.
+            session_id: Session ID for the span.
+            trace_id: Trace ID for linking spans.
+            parent_span_id: Parent span ID for nested spans.
+            timeout_ms: Request timeout in milliseconds.
+
+        Returns:
+            RunEmbeddingResult with embeddings and metadata.
+        """
+        self._validate_embedding_input(input, model, span_id)
+
+        effective_span_id = span_id or generate_span_id()
+        effective_trace_id = trace_id or generate_trace_id()
+        should_send_trace = send_trace is not False
+        timeout_seconds = (timeout_ms or DEFAULT_TIMEOUT_MS) / 1000.0
+
+        input_texts = [input] if isinstance(input, str) else input
+
+        start_time = time.time()
+        error_message: str | None = None
+        embedding_result = None
+
+        try:
+            embedding_result = self._llm_client.embed(
+                model=model,
+                input_texts=input_texts,
+                provider=provider,
+                api_key=provider_api_key,
+                dimensions=dimensions,
+                timeout=timeout_seconds,
+            )
+        except TraciaError:
+            raise
+        except Exception as exc:
+            error_message = sanitize_error_message(str(exc))
+            raise TraciaError(
+                code=TraciaErrorCode.PROVIDER_ERROR,
+                message=f"Embedding provider error: {error_message}",
+            ) from exc
+        finally:
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            if should_send_trace:
+                emb_count = len(embedding_result.embeddings) if embedding_result else 0
+                emb_dims = len(embedding_result.embeddings[0]) if embedding_result and embedding_result.embeddings else 0
+                resolved_provider = embedding_result.provider if embedding_result else resolve_provider(model, provider)
+
+                payload = CreateSpanPayload(
+                    spanId=effective_span_id,
+                    model=model,
+                    provider=resolved_provider,
+                    input={"text": input_texts},
+                    output=f'{{"dimensions": {emb_dims}, "count": {emb_count}}}' if embedding_result else None,
+                    status=SPAN_STATUS_ERROR if error_message else SPAN_STATUS_SUCCESS,
+                    error=error_message,
+                    latencyMs=latency_ms,
+                    inputTokens=embedding_result.total_tokens if embedding_result else 0,
+                    outputTokens=0,
+                    totalTokens=embedding_result.total_tokens if embedding_result else 0,
+                    tags=tags,
+                    userId=user_id,
+                    sessionId=session_id,
+                    traceId=effective_trace_id,
+                    parentSpanId=parent_span_id,
+                    spanKind="EMBEDDING",
+                )
+                self._schedule_span_creation(payload)
+
+        embeddings = [
+            EmbeddingVector(values=values, index=idx)
+            for idx, values in enumerate(embedding_result.embeddings)
+        ]
+
+        return RunEmbeddingResult(
+            embeddings=embeddings,
+            spanId=effective_span_id,
+            traceId=effective_trace_id,
+            latencyMs=latency_ms,
+            usage=EmbeddingUsage(totalTokens=embedding_result.total_tokens),
+            cost=None,
+            provider=embedding_result.provider,
+            model=model,
+        )
+
+    async def arun_embedding(
+        self,
+        *,
+        input: str | list[str],
+        model: str,
+        provider: LLMProvider | None = None,
+        provider_api_key: str | None = None,
+        dimensions: int | None = None,
+        send_trace: bool | None = None,
+        span_id: str | None = None,
+        tags: list[str] | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        trace_id: str | None = None,
+        parent_span_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> RunEmbeddingResult:
+        """Generate embeddings asynchronously.
+
+        See run_embedding for parameter documentation.
+        """
+        self._validate_embedding_input(input, model, span_id)
+
+        effective_span_id = span_id or generate_span_id()
+        effective_trace_id = trace_id or generate_trace_id()
+        should_send_trace = send_trace is not False
+        timeout_seconds = (timeout_ms or DEFAULT_TIMEOUT_MS) / 1000.0
+
+        input_texts = [input] if isinstance(input, str) else input
+
+        start_time = time.time()
+        error_message: str | None = None
+        embedding_result = None
+        latency_ms = 0
+
+        try:
+            embedding_result = await self._llm_client.aembed(
+                model=model,
+                input_texts=input_texts,
+                provider=provider,
+                api_key=provider_api_key,
+                dimensions=dimensions,
+                timeout=timeout_seconds,
+            )
+        except TraciaError:
+            raise
+        except Exception as exc:
+            error_message = sanitize_error_message(str(exc))
+            raise TraciaError(
+                code=TraciaErrorCode.PROVIDER_ERROR,
+                message=f"Embedding provider error: {error_message}",
+            ) from exc
+        finally:
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            if should_send_trace:
+                emb_count = len(embedding_result.embeddings) if embedding_result else 0
+                emb_dims = len(embedding_result.embeddings[0]) if embedding_result and embedding_result.embeddings else 0
+                resolved_provider = embedding_result.provider if embedding_result else resolve_provider(model, provider)
+
+                payload = CreateSpanPayload(
+                    spanId=effective_span_id,
+                    model=model,
+                    provider=resolved_provider,
+                    input={"text": input_texts},
+                    output=f'{{"dimensions": {emb_dims}, "count": {emb_count}}}' if embedding_result else None,
+                    status=SPAN_STATUS_ERROR if error_message else SPAN_STATUS_SUCCESS,
+                    error=error_message,
+                    latencyMs=latency_ms,
+                    inputTokens=embedding_result.total_tokens if embedding_result else 0,
+                    outputTokens=0,
+                    totalTokens=embedding_result.total_tokens if embedding_result else 0,
+                    tags=tags,
+                    userId=user_id,
+                    sessionId=session_id,
+                    traceId=effective_trace_id,
+                    parentSpanId=parent_span_id,
+                    spanKind="EMBEDDING",
+                )
+                self._schedule_span_creation(payload)
+
+        embeddings = [
+            EmbeddingVector(values=values, index=idx)
+            for idx, values in enumerate(embedding_result.embeddings)
+        ]
+
+        return RunEmbeddingResult(
+            embeddings=embeddings,
+            spanId=effective_span_id,
+            traceId=effective_trace_id,
+            latencyMs=latency_ms,
+            usage=EmbeddingUsage(totalTokens=embedding_result.total_tokens),
+            cost=None,
+            provider=embedding_result.provider,
+            model=model,
+        )
+
+    def _validate_embedding_input(
+        self,
+        input: str | list[str],
+        model: str,
+        span_id: str | None,
+    ) -> None:
+        """Validate run_embedding input parameters."""
+        if not model or not model.strip():
+            raise TraciaError(
+                code=TraciaErrorCode.INVALID_REQUEST,
+                message="model is required and cannot be empty",
+            )
+
+        if not input or (isinstance(input, list) and len(input) == 0):
+            raise TraciaError(
+                code=TraciaErrorCode.INVALID_REQUEST,
+                message="input is required and cannot be empty",
+            )
+
+        if isinstance(input, str) and not input.strip():
+            raise TraciaError(
+                code=TraciaErrorCode.INVALID_REQUEST,
+                message="input text cannot be empty",
+            )
+
+        if span_id is not None and not is_valid_span_id_format(span_id):
+            raise TraciaError(
+                code=TraciaErrorCode.INVALID_REQUEST,
+                message=f"Invalid span_id format: {span_id}. Expected sp_XXXXXXXXXXXXXXXX or tr_XXXXXXXXXXXXXXXX",
+            )
 
     def create_session(
         self,

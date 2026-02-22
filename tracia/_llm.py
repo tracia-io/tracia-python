@@ -27,6 +27,15 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class EmbeddingResult:
+    """Result from an embedding request."""
+
+    embeddings: list[list[float]]
+    total_tokens: int
+    provider: LLMProvider
+
+
+@dataclass
 class CompletionResult:
     """Result from an LLM completion."""
 
@@ -83,6 +92,15 @@ _MODEL_PROVIDER_MAP: dict[str, LLMProvider] = {
     "amazon.nova-pro-v1:0": LLMProvider.AMAZON_BEDROCK,
     # Amazon Bedrock - Mistral
     "mistral.pixtral-large-2502-v1:0": LLMProvider.AMAZON_BEDROCK,
+    # OpenAI - Embedding models
+    "text-embedding-3-small": LLMProvider.OPENAI,
+    "text-embedding-3-large": LLMProvider.OPENAI,
+    "text-embedding-ada-002": LLMProvider.OPENAI,
+    # Google - Embedding models
+    "text-embedding-004": LLMProvider.GOOGLE,
+    # Amazon Bedrock - Embedding models
+    "amazon.titan-embed-text-v2:0": LLMProvider.AMAZON_BEDROCK,
+    "cohere.embed-english-v3": LLMProvider.AMAZON_BEDROCK,
 }
 
 
@@ -641,6 +659,126 @@ class LLMClient:
             total_tokens=getattr(usage, "total_tokens", 0) if usage else 0,
             tool_calls=extract_tool_calls(response),
             finish_reason=parse_finish_reason(finish_reason),
+            provider=resolved_provider,
+        )
+
+    def embed(
+        self,
+        model: str,
+        input_texts: list[str],
+        *,
+        provider: LLMProvider | None = None,
+        api_key: str | None = None,
+        dimensions: int | None = None,
+        timeout: float | None = None,
+    ) -> EmbeddingResult:
+        """Make a synchronous embedding request."""
+        try:
+            import litellm
+        except ImportError as e:
+            raise TraciaError(
+                code=TraciaErrorCode.MISSING_PROVIDER_SDK,
+                message="litellm is not installed. Install it with: pip install litellm",
+            ) from e
+
+        resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.ANTHROPIC:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Anthropic does not offer embedding models. Use OpenAI, Google, or Amazon Bedrock instead.",
+            )
+
+        resolved_api_key = get_provider_api_key(resolved_provider, api_key)
+
+        request_kwargs: dict[str, Any] = {
+            "model": get_litellm_model(model, resolved_provider),
+            "input": input_texts,
+        }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
+        if dimensions is not None:
+            request_kwargs["dimensions"] = dimensions
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
+
+        try:
+            response = litellm.embedding(**request_kwargs)
+        except Exception as e:
+            error_msg = sanitize_error_message(str(e))
+            raise TraciaError(
+                code=TraciaErrorCode.PROVIDER_ERROR,
+                message=f"Embedding provider error: {error_msg}",
+            ) from e
+
+        data = getattr(response, "data", [])
+        embeddings = [item["embedding"] for item in data]
+        usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        return EmbeddingResult(
+            embeddings=embeddings,
+            total_tokens=total_tokens,
+            provider=resolved_provider,
+        )
+
+    async def aembed(
+        self,
+        model: str,
+        input_texts: list[str],
+        *,
+        provider: LLMProvider | None = None,
+        api_key: str | None = None,
+        dimensions: int | None = None,
+        timeout: float | None = None,
+    ) -> EmbeddingResult:
+        """Make an asynchronous embedding request."""
+        try:
+            import litellm
+        except ImportError as e:
+            raise TraciaError(
+                code=TraciaErrorCode.MISSING_PROVIDER_SDK,
+                message="litellm is not installed. Install it with: pip install litellm",
+            ) from e
+
+        resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.ANTHROPIC:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Anthropic does not offer embedding models. Use OpenAI, Google, or Amazon Bedrock instead.",
+            )
+
+        resolved_api_key = get_provider_api_key(resolved_provider, api_key)
+
+        request_kwargs: dict[str, Any] = {
+            "model": get_litellm_model(model, resolved_provider),
+            "input": input_texts,
+        }
+        if resolved_api_key is not None:
+            request_kwargs["api_key"] = resolved_api_key
+        if dimensions is not None:
+            request_kwargs["dimensions"] = dimensions
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
+
+        try:
+            response = await litellm.aembedding(**request_kwargs)
+        except Exception as e:
+            error_msg = sanitize_error_message(str(e))
+            raise TraciaError(
+                code=TraciaErrorCode.PROVIDER_ERROR,
+                message=f"Embedding provider error: {error_msg}",
+            ) from e
+
+        data = getattr(response, "data", [])
+        embeddings = [item["embedding"] for item in data]
+        usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        return EmbeddingResult(
+            embeddings=embeddings,
+            total_tokens=total_tokens,
             provider=resolved_provider,
         )
 
