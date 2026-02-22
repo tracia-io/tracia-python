@@ -101,6 +101,13 @@ _MODEL_PROVIDER_MAP: dict[str, LLMProvider] = {
     # Amazon Bedrock - Embedding models
     "amazon.titan-embed-text-v2:0": LLMProvider.AMAZON_BEDROCK,
     "cohere.embed-english-v3": LLMProvider.AMAZON_BEDROCK,
+    # Voyage - Embedding models
+    "voyage-3": LLMProvider.VOYAGE,
+    "voyage-3-large": LLMProvider.VOYAGE,
+    "voyage-3-lite": LLMProvider.VOYAGE,
+    "voyage-code-3": LLMProvider.VOYAGE,
+    "voyage-finance-2": LLMProvider.VOYAGE,
+    "voyage-law-2": LLMProvider.VOYAGE,
 }
 
 
@@ -163,6 +170,8 @@ def resolve_provider(model: str, explicit_provider: LLMProvider | None) -> LLMPr
         return LLMProvider.ANTHROPIC
     if model.startswith("gemini-"):
         return LLMProvider.GOOGLE
+    if model.startswith("voyage-"):
+        return LLMProvider.VOYAGE
 
     raise TraciaError(
         code=TraciaErrorCode.UNSUPPORTED_MODEL,
@@ -189,6 +198,8 @@ def get_litellm_model(model: str, provider: LLMProvider) -> str:
         return f"bedrock/{apply_bedrock_region_prefix(model, region)}"
     if provider == LLMProvider.GOOGLE and not model.startswith("gemini/"):
         return f"gemini/{model}"
+    if provider == LLMProvider.VOYAGE and not model.startswith("voyage/"):
+        return f"voyage/{model}"
     return model
 
 
@@ -502,6 +513,13 @@ class LLMClient:
             ) from e
 
         resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.VOYAGE:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage is an embedding-only provider. Use embed() instead of complete().",
+            )
+
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
 
         # Build the request
@@ -605,6 +623,13 @@ class LLMClient:
             ) from e
 
         resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.VOYAGE:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage is an embedding-only provider. Use aembed() instead of acomplete().",
+            )
+
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
 
         # Build the request
@@ -689,6 +714,12 @@ class LLMClient:
                 message="Anthropic does not offer embedding models. Use OpenAI, Google, or Amazon Bedrock instead.",
             )
 
+        if resolved_provider == LLMProvider.VOYAGE and dimensions is not None:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage AI does not support custom embedding dimensions.",
+            )
+
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
 
         request_kwargs: dict[str, Any] = {
@@ -747,6 +778,12 @@ class LLMClient:
             raise TraciaError(
                 code=TraciaErrorCode.UNSUPPORTED_MODEL,
                 message="Anthropic does not offer embedding models. Use OpenAI, Google, or Amazon Bedrock instead.",
+            )
+
+        if resolved_provider == LLMProvider.VOYAGE and dimensions is not None:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage AI does not support custom embedding dimensions.",
             )
 
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
@@ -828,6 +865,13 @@ class LLMClient:
             ) from e
 
         resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.VOYAGE:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage is an embedding-only provider. Use embed() instead of stream().",
+            )
+
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
 
         # Build the request
@@ -994,6 +1038,13 @@ class LLMClient:
             ) from e
 
         resolved_provider = resolve_provider(model, provider)
+
+        if resolved_provider == LLMProvider.VOYAGE:
+            raise TraciaError(
+                code=TraciaErrorCode.UNSUPPORTED_MODEL,
+                message="Voyage is an embedding-only provider. Use aembed() instead of astream().",
+            )
+
         resolved_api_key = get_provider_api_key(resolved_provider, api_key)
 
         # Build the request

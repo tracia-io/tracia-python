@@ -30,6 +30,7 @@ ENV_VAR_MAP = {
     "anthropic": "ANTHROPIC_API_KEY",
     "google": "GOOGLE_API_KEY",
     "amazon_bedrock": "BEDROCK_API_KEY",
+    "voyage": "VOYAGE_API_KEY",
 }
 
 # Evaluation Constants
